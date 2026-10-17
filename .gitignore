@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-mobile
 .output
 .vercel
 .tanstack
@@ -15,3 +16,12 @@ artifacts
 .grok/*
 !.grok/app-env.json
 AGENTS.md
+
+# Android build output (sources stay in the repo)
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/captures
+*.apk
+*.aab

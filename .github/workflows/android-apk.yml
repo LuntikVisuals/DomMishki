@@ -1,0 +1,54 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platforms;android-36
+
+      - name: Install and bundle the game
+        run: |
+          npm ci
+          npm run build:mobile
+          npx cap sync android
+
+      - name: Build the release APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk She-Doesnt-Sleep.apk
+          tag="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            tag="v1.0.0"
+          fi
+          gh release create "$tag" She-Doesnt-Sleep.apk \
+            --title "She Doesn't Sleep ${tag}" \
+            --latest \
+            --notes "Phone build of She Doesn't Sleep. Install the APK and allow apps from this source. A newer build replaces this one. Solo works on the phone, in 3D and top-down. A two-player room still needs the website, because that server is not inside the APK. This is not Granny and is not connected to its author."
