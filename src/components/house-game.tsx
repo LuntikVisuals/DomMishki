@@ -342,7 +342,7 @@ export function HouseGame() {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1 rounded-lg bg-bg/80 px-3 py-2 backdrop-blur-sm">
-              <p className="font-display text-base leading-tight">Бабушка не спит</p>
+              <p className="font-display text-base leading-tight">She Doesn't Sleep</p>
               <p ref={goalRef} className="mt-0.5 text-sm leading-snug text-muted" />
             </div>
             <button
@@ -395,10 +395,10 @@ export function HouseGame() {
       {phase !== "play" && (
         <div className="absolute inset-0 z-30 flex items-end justify-center overflow-y-auto bg-bg/55 p-4 sm:items-center" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))", paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
           <div className="w-full max-w-lg rounded-2xl border border-border bg-surface/95 p-5 shadow-2xl sm:p-7">
-            <p className="text-xs tracking-[0.22em] text-accent uppercase">Ночной побег</p>
-            <h1 className="font-display mt-1 text-4xl leading-none sm:text-5xl">Бабушка не спит</h1>
+            <p className="text-xs tracking-[0.22em] text-accent uppercase">Miller Road, Ohio</p>
+            <h1 className="font-display mt-1 text-4xl leading-none sm:text-5xl">She Doesn't Sleep</h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              Бабушка слышит бег и видит фонарь. Найди ключ или выломай окно. Можно играть в 3D или сверху.
+              Ночь в старом доме в Огайо. Она слышит бег и видит фонарь. Найди ключ или выломай окно. Можно играть в 3D или сверху.
             </p>
 
             {phase === "menu" && !wifiOpen && (
@@ -598,7 +598,7 @@ export function HouseGame() {
 
       {result && (
         <Overlay>
-          <p className="text-xs tracking-[0.2em] text-accent uppercase">{result.you === "bear" ? "Ночь бабушки" : "Рейтинг ночи"}</p>
+          <p className="text-xs tracking-[0.2em] text-accent uppercase">{result.you === "bear" ? "Her night" : "Рейтинг ночи"}</p>
           <p className="font-display text-7xl leading-none">{result.rank}</p>
           <p className="font-display mt-1 text-2xl">{result.title}</p>
           <p className="mt-3 text-sm text-muted">

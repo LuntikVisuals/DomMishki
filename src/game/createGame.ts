@@ -72,7 +72,7 @@ const WALK = 2.5;
 const SPRINT = 4.65;
 const CROUCH = 1.2;
 const NOTE =
-  "Кладовая за кабинетом, код 471.\nКлюч от парадной двери — в комоде на втором этаже, восточная комната.\nОкно кухни заколочено. Молоток лежит в кладовой.\nНе бегай. Он слышит.";
+  "Miller Road, Knox County, Ohio.\nКладовая за кабинетом. Код 471.\nКлюч от входной двери — в комоде на втором этаже, восточная комната.\nКухонное окно заколочено. Молоток в кладовой.\nНе бегай. Она слышит.";
 
 const tmp = new THREE.Vector3();
 
@@ -601,11 +601,11 @@ export function createGame(
 
   function goalText() {
     const front = level.doors.find((d) => d.id === "front");
-    if (front && front.target > 0.5 && hasKey) return "Дверь открыта. Беги через порог во двор — на юг.";
-    if (hasKey) return "Ключ у тебя. Открой парадную дверь на юге холла и выйди.";
+    if (front && front.target > 0.5 && hasKey) return "Дверь открыта. Беги через крыльцо на юг, к дороге.";
+    if (hasKey) return "Ключ у тебя. Открой входную дверь на юге и выйди на крыльцо.";
     if (boards <= 0) return "Кухонное окно свободно. Подойди и нажми E.";
     if (hasHammer) return `Молоток есть. Досок на кухонном окне: ${boards}. Удар — E, это громко.`;
-    if (!readNote) return "Записка в гостиной слева. Ключ — наверху, молоток — в кладовой.";
+    if (!readNote) return "Записка на столе в гостиной слева. Ключ — наверху, молоток — в кладовой.";
     return "Код кладовой 471. Ключ в восточной комнате на втором этаже. Тише на поворотах.";
   }
 
@@ -635,7 +635,7 @@ export function createGame(
       }
     }
     if (!best) return "";
-    if (best.lock === "key" && !hasKey) return "Нужен ключ от парадной";
+    if (best.lock === "key" && !hasKey) return "Нужен ключ от входной двери";
     if (best.lock === "code" && !codeOk) return "E — код кладовой";
     return best.target > 0.5 ? "E — закрыть дверь" : "E — открыть дверь";
   }

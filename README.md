@@ -1,8 +1,8 @@
-# Бабушка не спит
+# She Doesn't Sleep
 
-Браузерная игра для телефона: выживший выбирает внешность и убегает от бабушки. Два вида — 3D сзади героя и плоская карта сверху. Есть одиночная партия, комната на двоих по коду и локальная таблица рекордов.
+A phone game set in an old house on Miller Road, Knox County, Ohio. Pick a survivor and the woman who hunts you, then escape in 3D or from a top-down map. Solo, a two-player room code, and a score list on the device.
 
-Неофициальная игра. Это не Granny и не связана с её автором.
+Unofficial game. This is not Granny and is not connected to its author.
 
 ## Запуск
 

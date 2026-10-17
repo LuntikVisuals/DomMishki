@@ -11,11 +11,11 @@ export const Route = createRootRoute({
         name: "viewport",
         content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
       },
-      { title: "Бабушка не спит" },
+      { title: "She Doesn't Sleep" },
       { name: "theme-color", content: "#100c0a" },
       {
         name: "description",
-        content: "Ночной побег из дома. Выживший, бабушка, вид сверху или 3D.",
+        content: "A night in an old house on Miller Road, Ohio. Escape on foot, in 3D or from above.",
       },
     ],
     links: [
