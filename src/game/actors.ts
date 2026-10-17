@@ -27,12 +27,18 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, shadows = true) {
   return m;
 }
 
-export function createSurvivor(): HumanRig {
+export type SurvivorLook = "hood" | "coat" | "cap";
+export type GrandmaLook = "shawl" | "coat" | "braid";
+
+export function createSurvivor(look: SurvivorLook = "hood"): HumanRig {
   const root = new THREE.Group();
   const rig = new THREE.Group();
   root.add(rig);
   const skin = new THREE.MeshStandardMaterial({ color: 0xe0b090, roughness: 0.62 });
-  const cloth = new THREE.MeshStandardMaterial({ color: 0x243044, roughness: 0.86 });
+  const cloth = new THREE.MeshStandardMaterial({
+    color: look === "coat" ? 0x6a4634 : look === "cap" ? 0x1d4a3a : 0x243044,
+    roughness: 0.86,
+  });
   const pants = new THREE.MeshStandardMaterial({ color: 0x2a241c, roughness: 0.9 });
   const shoe = new THREE.MeshStandardMaterial({ color: 0x141210, roughness: 0.55 });
   const metal = new THREE.MeshStandardMaterial({ color: 0xc9c2b2, roughness: 0.35, metalness: 0.6 });
@@ -56,10 +62,28 @@ export function createSurvivor(): HumanRig {
   const torso = mesh(new THREE.BoxGeometry(0.44, 0.52, 0.24), cloth);
   torso.position.y = 1.16;
   rig.add(torso);
-  const hood = mesh(new THREE.SphereGeometry(0.175, 16, 12), cloth);
-  hood.position.set(0, 1.58, -0.02);
-  hood.scale.set(1.05, 1.08, 1.12);
-  rig.add(hood);
+  const hairMat = new THREE.MeshStandardMaterial({ color: look === "coat" ? 0x1a120e : 0x2a2118, roughness: 0.78 });
+  if (look === "hood") {
+    const hood = mesh(new THREE.SphereGeometry(0.175, 16, 12), cloth);
+    hood.position.set(0, 1.58, -0.02);
+    hood.scale.set(1.05, 1.08, 1.12);
+    rig.add(hood);
+  } else if (look === "cap") {
+    const cap = mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.08, 12), cloth);
+    cap.position.set(0, 1.72, 0.01);
+    const brim = mesh(new THREE.BoxGeometry(0.2, 0.03, 0.14), cloth);
+    brim.position.set(0, 1.68, 0.12);
+    const hair = mesh(new THREE.SphereGeometry(0.12, 10, 8), hairMat);
+    hair.position.set(0, 1.6, -0.05);
+    rig.add(cap, brim, hair);
+  } else {
+    const hair = mesh(new THREE.SphereGeometry(0.145, 12, 10), hairMat);
+    hair.position.set(0, 1.64, -0.02);
+    hair.scale.set(1, 1.2, 1);
+    const hem = mesh(new THREE.BoxGeometry(0.5, 0.34, 0.28), cloth);
+    hem.position.y = 0.78;
+    rig.add(hair, hem);
+  }
   const face = mesh(new THREE.SphereGeometry(0.13, 16, 12), skin);
   face.position.set(0, 1.56, 0.06);
   face.scale.z = 0.85;
@@ -93,6 +117,85 @@ export function animateHuman(h: HumanRig, phase: number, speed: number, crouch: 
   h.armR.rotation.x = Math.sin(phase) * amp * 0.45 + 0.5;
   h.rig.position.y = crouch ? -0.28 : Math.sin(phase * 2) * 0.025 * Math.min(1, speed);
   h.rig.scale.y = crouch ? 0.78 : 1;
+}
+
+export function createGrandma(look: GrandmaLook): HumanRig {
+  const root = new THREE.Group();
+  const rig = new THREE.Group();
+  root.add(rig);
+  rig.rotation.x = 0.16;
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd2ad92, roughness: 0.74 });
+  const cloth = new THREE.MeshStandardMaterial({
+    color: look === "coat" ? 0x241c22 : look === "braid" ? 0x5a3034 : 0x3a2434,
+    roughness: 0.9,
+  });
+  const apron = new THREE.MeshStandardMaterial({ color: look === "shawl" ? 0x7c3030 : 0x3a342c, roughness: 0.86 });
+  const hair = new THREE.MeshStandardMaterial({ color: 0xc9c6be, roughness: 0.7 });
+  const shoe = new THREE.MeshStandardMaterial({ color: 0x14110f, roughness: 0.55 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6a4a28, roughness: 0.72 });
+
+  const legGeo = new THREE.BoxGeometry(0.16, 0.7, 0.16);
+  const shoeGeo = new THREE.BoxGeometry(0.17, 0.08, 0.26);
+  const makeLeg = (x: number) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 0.78, 0);
+    const leg = mesh(legGeo, cloth);
+    leg.position.y = -0.35;
+    const foot = mesh(shoeGeo, shoe);
+    foot.position.set(0, -0.7, 0.04);
+    pivot.add(leg, foot);
+    return pivot;
+  };
+  const legL = makeLeg(-0.12);
+  const legR = makeLeg(0.12);
+  rig.add(legL, legR);
+
+  const torso = mesh(new THREE.BoxGeometry(0.5, 0.58, 0.3), cloth);
+  torso.position.y = 1.12;
+  const skirt = mesh(new THREE.BoxGeometry(0.58, 0.42, 0.36), cloth);
+  skirt.position.y = 0.72;
+  const bib = mesh(new THREE.BoxGeometry(0.28, 0.36, 0.08), apron);
+  bib.position.set(0, 1.12, 0.16);
+  rig.add(torso, skirt, bib);
+
+  const face = mesh(new THREE.SphereGeometry(0.15, 16, 12), skin);
+  face.position.set(0, 1.58, 0.08);
+  face.scale.z = 0.82;
+  rig.add(face);
+
+  if (look === "braid") {
+    const braid = mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.55, 8), hair);
+    braid.position.set(0.12, 1.28, -0.08);
+    braid.rotation.x = 0.4;
+    const bun = mesh(new THREE.SphereGeometry(0.12, 10, 8), hair);
+    bun.position.set(0, 1.74, -0.02);
+    rig.add(braid, bun);
+  } else {
+    const scarf = mesh(new THREE.SphereGeometry(0.2, 12, 10), cloth);
+    scarf.position.set(0, 1.62, -0.02);
+    scarf.scale.set(1.15, 0.9, 1.2);
+    const knot = mesh(new THREE.BoxGeometry(0.1, 0.08, 0.08), apron);
+    knot.position.set(0, 1.42, 0.16);
+    rig.add(scarf, knot);
+  }
+
+  const armGeo = new THREE.BoxGeometry(0.13, 0.48, 0.13);
+  const makeArm = (x: number) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 1.32, 0.02);
+    const arm = mesh(armGeo, cloth);
+    arm.position.y = -0.26;
+    pivot.add(arm);
+    return pivot;
+  };
+  const armL = makeArm(-0.34);
+  const armR = makeArm(0.34);
+  const cane = mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.15, 8), wood);
+  cane.position.set(0, -0.7, 0.08);
+  armR.add(cane);
+  rig.add(armL, armR);
+
+  return { root, rig, legL, legR, armL, armR };
 }
 
 export function createBear(): BearRig {

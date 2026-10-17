@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { animateBear, animateHuman, createBear, createSurvivor } from "./actors";
+import { animateHuman, createGrandma, createSurvivor, type GrandmaLook, type SurvivorLook } from "./actors";
 import { Sfx } from "./audio";
 import {
   BEAR_SPAWN,
@@ -12,7 +12,14 @@ import {
 } from "./level";
 import { formatTime, grade, type Rank } from "./rating";
 
-export type PlayMode = { control: "survivor" | "bear"; aiBear: boolean };
+export type ViewMode = "3d" | "top";
+export type PlayMode = {
+  control: "survivor" | "bear";
+  aiBear: boolean;
+  view?: ViewMode;
+  survivor?: SurvivorLook;
+  grandma?: GrandmaLook;
+};
 
 export type NetMsg =
   | { t: "p"; x: number; y: number; z: number; yaw: number; c: number; h: number }
@@ -83,6 +90,7 @@ function shortest(a: number, b: number) {
 
 export type Engine = {
   start: (mode: PlayMode) => void;
+  setCast: (cast: { survivor: SurvivorLook; grandma: GrandmaLook; view: ViewMode }) => void;
   destroy: () => void;
   setStick: (x: number, y: number) => void;
   addLook: (dx: number, dy: number) => void;
@@ -116,15 +124,31 @@ export function createGame(
   renderer.toneMappingExposure = 1.65;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.localClippingEnabled = true;
+  const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 2.95);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, 1, 0.08, 80);
   camera.position.set(8, 6, 12);
+  const ortho = new THREE.OrthographicCamera(-8, 8, 8, -8, 0.1, 80);
+  ortho.up.set(0, 0, -1);
 
   const level = buildLevel(scene);
-  const human = createSurvivor();
-  const bearRig = createBear();
-  scene.add(human.root, bearRig.root);
+  const survivorLooks: Record<SurvivorLook, ReturnType<typeof createSurvivor>> = {
+    hood: createSurvivor("hood"),
+    coat: createSurvivor("coat"),
+    cap: createSurvivor("cap"),
+  };
+  const grandmaLooks: Record<GrandmaLook, ReturnType<typeof createGrandma>> = {
+    shawl: createGrandma("shawl"),
+    coat: createGrandma("coat"),
+    braid: createGrandma("braid"),
+  };
+  let human = survivorLooks.hood;
+  let grandma = grandmaLooks.shawl;
+  let viewMode: ViewMode = "3d";
+  for (const rig of Object.values(survivorLooks)) scene.add(rig.root);
+  for (const rig of Object.values(grandmaLooks)) scene.add(rig.root);
 
   const sfx = new Sfx();
   const timer = new THREE.Timer();
@@ -163,6 +187,14 @@ export function createGame(
   let control: "survivor" | "bear" = "survivor";
   let aiBear = true;
   let modeStarted = false;
+
+  function showCast() {
+    for (const rig of Object.values(survivorLooks)) rig.root.visible = false;
+    for (const rig of Object.values(grandmaLooks)) rig.root.visible = false;
+    human.root.visible = true;
+    grandma.root.visible = true;
+  }
+  showCast();
 
   let hasKey = false;
   let hasHammer = false;
@@ -205,6 +237,28 @@ export function createGame(
   const byId = new Map<string, NavNode>(level.nodes.map((n) => [n.id, n]));
 
   const held = (code: string) => (forced ? forced.has(code) : keys.has(code));
+
+  function readMove(yaw: number, turn: number, dt: number) {
+    if (viewMode === "top") {
+      let mx = stickX;
+      let mz = -stickY;
+      if (held("KeyW") || held("ArrowUp")) mz -= 1;
+      if (held("KeyS") || held("ArrowDown")) mz += 1;
+      if (held("KeyA") || held("ArrowLeft")) mx -= 1;
+      if (held("KeyD") || held("ArrowRight")) mx += 1;
+      const len = Math.hypot(mx, mz);
+      return { throttle: Math.min(1, len), yaw: len > 0.12 ? Math.atan2(-mx / len, -mz / len) : yaw };
+    }
+    let steer = 0;
+    if (held("KeyA") || held("ArrowLeft")) steer += 1;
+    if (held("KeyD") || held("ArrowRight")) steer -= 1;
+    steer = clamp(steer - stickX, -1, 1);
+    let throttle = 0;
+    if (held("KeyW") || held("ArrowUp")) throttle += 1;
+    if (held("KeyS") || held("ArrowDown")) throttle -= 1;
+    throttle = clamp(throttle + stickY, -1, 1);
+    return { throttle, yaw: yaw + steer * turn * dt };
+  }
 
   function resize() {
     const w = canvas.clientWidth || window.innerWidth;
@@ -740,20 +794,16 @@ export function createGame(
       if (control === "survivor" && !aiBear) {
         /* remote player is us */
       }
-      player.yaw -= lookX * 0.00215;
-      player.pitch = clamp(player.pitch - lookY * 0.0018, -0.85, 0.7);
+      if (viewMode !== "top") {
+        player.yaw -= lookX * 0.00215;
+        player.pitch = clamp(player.pitch - lookY * 0.0018, -0.85, 0.7);
+      }
       lookX = 0;
       lookY = 0;
       if (!inputLocked && !hiding) {
-        let steer = 0;
-        if (held("KeyA") || held("ArrowLeft")) steer += 1;
-        if (held("KeyD") || held("ArrowRight")) steer -= 1;
-        steer = clamp(steer - stickX, -1, 1);
-        let throttle = 0;
-        if (held("KeyW") || held("ArrowUp")) throttle += 1;
-        if (held("KeyS") || held("ArrowDown")) throttle -= 1;
-        throttle = clamp(throttle + stickY, -1, 1);
-        player.yaw += steer * TURN * dt;
+        const move = readMove(player.yaw, TURN, dt);
+        player.yaw = move.yaw;
+        const throttle = move.throttle;
         const crouch = crouchHeld || held("ControlLeft") || held("KeyC");
         const wantSprint = (sprintHeld || held("ShiftLeft") || held("ShiftRight")) && throttle > 0.15 && !crouch;
         const sprinting = wantSprint && stamina > 6;
@@ -796,19 +846,13 @@ export function createGame(
       }
     } else {
       time += dt;
-      bear.yaw -= lookX * 0.00215;
+      if (viewMode !== "top") bear.yaw -= lookX * 0.00215;
       lookX = 0;
       lookY = 0;
       if (!inputLocked && !over) {
-        let steer = 0;
-        if (held("KeyA") || held("ArrowLeft")) steer += 1;
-        if (held("KeyD") || held("ArrowRight")) steer -= 1;
-        steer = clamp(steer - stickX, -1, 1);
-        let throttle = 0;
-        if (held("KeyW") || held("ArrowUp")) throttle += 1;
-        if (held("KeyS") || held("ArrowDown")) throttle -= 1;
-        throttle = clamp(throttle + stickY, -1, 1);
-        bear.yaw += steer * 2.1 * dt;
+        const move = readMove(bear.yaw, 2.1, dt);
+        bear.yaw = move.yaw;
+        const throttle = move.throttle;
         const f = yawToForward(bear.yaw);
         const sp = 3.35;
         bear.x += f.x * throttle * sp * dt;
@@ -890,11 +934,14 @@ export function createGame(
     animateHuman(human, phaseH, control === "survivor" ? horizSpeed : 0, crouch || hiding);
 
     const bf = yawToForward(bear.yaw);
-    bearRig.root.position.set(bear.x, bear.y, bear.z);
-    bearRig.root.lookAt(bear.x + bf.x, bear.y, bear.z + bf.z);
-    animateBear(bearRig, phaseB, bearState === "patrol" ? 1.2 : 2.4, bearState === "chase" || control === "bear", elapsed);
+    grandma.root.position.set(bear.x, bear.y, bear.z);
+    grandma.root.lookAt(bear.x + bf.x, bear.y, bear.z + bf.z);
+    const huntSpeed = control === "bear" ? horizSpeed : bearState === "chase" ? 3.2 : 1.4;
+    animateHuman(grandma, phaseB, huntSpeed, false);
     phaseB += dt * 3;
 
+    let draw: THREE.Camera = camera;
+    renderer.clippingPlanes = [];
     if (!playing) {
       const a = elapsed * 0.22;
       camera.position.set(Math.sin(a) * 3.2, 2.15, 10.2);
@@ -902,12 +949,12 @@ export function createGame(
       human.root.position.set(-0.35, 0, 5.35);
       human.root.lookAt(0, 1, 8);
       animateHuman(human, elapsed * 2, 0, false);
-      bearRig.root.position.set(1.55, 0, 7.55);
-      bearRig.root.lookAt(camera.position.x, 1.1, camera.position.z);
-      animateBear(bearRig, elapsed * 2.2, 0.4, false, elapsed);
+      grandma.root.position.set(1.55, 0, 7.55);
+      grandma.root.lookAt(camera.position.x, 1.1, camera.position.z);
+      animateHuman(grandma, elapsed * 2.2, 0.4, false);
       level.flash.intensity = 0;
-      human.root.visible = true;
-      bearRig.root.visible = true;
+      renderer.clippingPlanes = [];
+      showCast();
     } else if (scare > 0) {
       scare -= dt;
       const face = yawToForward(bear.yaw);
@@ -915,7 +962,27 @@ export function createGame(
       camera.lookAt(bear.x, bear.y + 1.7, bear.z);
       level.flash.intensity = 0;
       if (scare <= 0 && pending) showResult(pending);
+    } else if (viewMode === "top") {
+      const aspect = camera.aspect || 1;
+      const halfH = 7.4;
+      ortho.left = -halfH * aspect;
+      ortho.right = halfH * aspect;
+      ortho.top = halfH;
+      ortho.bottom = -halfH;
+      ortho.position.set(px, 22, pz);
+      ortho.up.set(0, 0, -1);
+      ortho.lookAt(px, 0, pz);
+      ortho.updateProjectionMatrix();
+      human.root.visible = !hiding;
+      grandma.root.visible = true;
+      level.flash.position.set(px, 8, pz);
+      level.flash.target.position.set(px, 0, pz);
+      level.flash.intensity = flashOn && battery > 0 && control === "survivor" ? 90 : 0;
+      renderer.clippingPlanes = [clipPlane];
+      clipPlane.constant = py > 1.6 ? 5.85 : 2.95;
+      draw = ortho;
     } else {
+      renderer.clippingPlanes = [];
       const eye = py + (crouch ? 1.05 : 1.55);
       const dist = crouch ? 2.35 : 3.25;
       const ff = yawToForward(yaw);
@@ -943,9 +1010,8 @@ export function createGame(
       const look = tmp.set(px + ff.x * 2.2, eye + 0.1 + Math.sin(player.pitch) * 1.6, pz + ff.z * 2.2);
       camera.lookAt(look);
       const camDist = Math.hypot(camera.position.x - px, camera.position.z - pz);
-      (control === "survivor" ? human.root : bearRig.root).visible = camDist > 0.9;
-      human.root.visible = control === "bear" ? true : camDist > 0.9;
-      bearRig.root.visible = true;
+      human.root.visible = control === "bear" ? true : !hiding && camDist > 0.9;
+      grandma.root.visible = control === "survivor" ? true : camDist > 0.9;
 
       level.flash.position.copy(camera.position);
       level.flash.target.position.copy(look);
@@ -971,7 +1037,7 @@ export function createGame(
       you: control,
     });
 
-    renderer.render(scene, camera);
+    renderer.render(scene, draw);
   }
 
   let acc = 0;
@@ -1050,11 +1116,21 @@ export function createGame(
     start(mode) {
       control = mode.control;
       aiBear = mode.aiBear;
+      if (mode.view) viewMode = mode.view;
+      if (mode.survivor) human = survivorLooks[mode.survivor];
+      if (mode.grandma) grandma = grandmaLooks[mode.grandma];
+      showCast();
       resetWorld();
       playing = true;
       modeStarted = true;
       paused = false;
       document.body.focus();
+    },
+    setCast(cast) {
+      human = survivorLooks[cast.survivor];
+      grandma = grandmaLooks[cast.grandma];
+      viewMode = cast.view;
+      showCast();
     },
     destroy() {
       dead = true;

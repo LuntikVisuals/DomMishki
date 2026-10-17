@@ -11,11 +11,11 @@ export const Route = createRootRoute({
         name: "viewport",
         content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
       },
-      { title: "Дом Мишки" },
+      { title: "Бабушка не спит" },
       { name: "theme-color", content: "#100c0a" },
       {
         name: "description",
-        content: "Ночной побег из дома. Выживший, мишка в цилиндре и игра по одной сети Wi-Fi.",
+        content: "Ночной побег из дома. Выживший, бабушка, вид сверху или 3D.",
       },
     ],
     links: [

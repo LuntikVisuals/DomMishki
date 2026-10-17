@@ -1,13 +1,25 @@
 import { useEffect, useRef, useState } from "react";
+import type { GrandmaLook, SurvivorLook } from "@/game/actors";
+import type { Engine, Hud, NetMsg, Result, ViewMode } from "@/game/createGame";
 import { P2PRoom, type PeerInfo } from "@/lib/multiplayer";
-import type { Engine, Hud, NetMsg, Result } from "@/game/createGame";
 import { formatTime, loadBoard, pushBoard, type BoardRow } from "@/game/rating";
 
 type Phase = "menu" | "lobby" | "play";
 type Role = "survivor" | "bear";
 
 const DISCLAIMER =
-  "Фан-трибьют. Мишка в цилиндре вдохновлён Фредди Фазбером. Все права на этого персонажа принадлежат Скотту Коутону (Scott Cawthon). Неофициальная игра, с автором не связана.";
+  "Неофициальная игра. Это не Granny и не связана с её автором. Дом и бабушка придуманы заново.";
+
+const SURVIVORS: { id: SurvivorLook; label: string }[] = [
+  { id: "hood", label: "Капюшон" },
+  { id: "coat", label: "Пальто" },
+  { id: "cap", label: "Кепка" },
+];
+const GRANDMAS: { id: GrandmaLook; label: string }[] = [
+  { id: "shawl", label: "Платок" },
+  { id: "coat", label: "Пальто" },
+  { id: "braid", label: "Коса" },
+];
 
 function rid(prefix: string) {
   return `${prefix}${Math.random().toString(36).slice(2, 12)}`;
@@ -42,6 +54,26 @@ export function HouseGame() {
   const [note, setNote] = useState<string | null>(null);
   const [pad, setPad] = useState(false);
   const [playingAs, setPlayingAs] = useState<Role>("survivor");
+  const [view, setView] = useState<ViewMode>("3d");
+  const [survivorLook, setSurvivorLook] = useState<SurvivorLook>("hood");
+  const [grandmaLook, setGrandmaLook] = useState<GrandmaLook>("shawl");
+  const viewRef = useRef<ViewMode>("3d");
+  const survivorRef = useRef<SurvivorLook>("hood");
+  const grandmaRef = useRef<GrandmaLook>("shawl");
+
+  function pickCast(next: { view?: ViewMode; survivor?: SurvivorLook; grandma?: GrandmaLook }) {
+    if (next.view) viewRef.current = next.view;
+    if (next.survivor) survivorRef.current = next.survivor;
+    if (next.grandma) grandmaRef.current = next.grandma;
+    if (next.view) setView(next.view);
+    if (next.survivor) setSurvivorLook(next.survivor);
+    if (next.grandma) setGrandmaLook(next.grandma);
+    engineRef.current?.setCast({
+      view: viewRef.current,
+      survivor: survivorRef.current,
+      grandma: grandmaRef.current,
+    });
+  }
   const [digits, setDigits] = useState("");
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -140,7 +172,13 @@ export function HouseGame() {
     setPad(false);
     setPaused(false);
     engineRef.current?.setNet(null);
-    engineRef.current?.start({ control: "survivor", aiBear: true });
+    engineRef.current?.start({
+      control: "survivor",
+      aiBear: true,
+      view: viewRef.current,
+      survivor: survivorRef.current,
+      grandma: grandmaRef.current,
+    });
     setPlayingAs("survivor");
     setPhase("play");
   }
@@ -220,6 +258,9 @@ export function HouseGame() {
     engineRef.current?.start({
       control: iAmBear ? "bear" : "survivor",
       aiBear: !iAmBear && !friendBear,
+      view: viewRef.current,
+      survivor: survivorRef.current,
+      grandma: grandmaRef.current,
     });
     setPhase("play");
   };
@@ -244,6 +285,11 @@ export function HouseGame() {
     if (room && p2pRef.current) hostBegin();
     else startSolo();
   }
+
+  useEffect(() => {
+    if (!ready) return;
+    engineRef.current?.setCast({ survivor: survivorLook, grandma: grandmaLook, view });
+  }, [ready, survivorLook, grandmaLook, view]);
 
   useEffect(() => {
     if (phase === "play" && !paused && !note && !pad) return;
@@ -296,7 +342,7 @@ export function HouseGame() {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1 rounded-lg bg-bg/80 px-3 py-2 backdrop-blur-sm">
-              <p className="font-display text-base leading-tight">Дом Мишки</p>
+              <p className="font-display text-base leading-tight">Бабушка не спит</p>
               <p ref={goalRef} className="mt-0.5 text-sm leading-snug text-muted" />
             </div>
             <button
@@ -350,13 +396,30 @@ export function HouseGame() {
         <div className="absolute inset-0 z-30 flex items-end justify-center overflow-y-auto bg-bg/55 p-4 sm:items-center" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))", paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
           <div className="w-full max-w-lg rounded-2xl border border-border bg-surface/95 p-5 shadow-2xl sm:p-7">
             <p className="text-xs tracking-[0.22em] text-accent uppercase">Ночной побег</p>
-            <h1 className="font-display mt-1 text-4xl leading-none sm:text-6xl">Дом Мишки</h1>
+            <h1 className="font-display mt-1 text-4xl leading-none sm:text-5xl">Бабушка не спит</h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              Дом на весь экран телефона. Мишка слышит бег и видит фонарь. Найди ключ или выломай окно.
+              Бабушка слышит бег и видит фонарь. Найди ключ или выломай окно. Можно играть в 3D или сверху.
             </p>
 
             {phase === "menu" && !wifiOpen && (
               <div className="mt-5 flex flex-col gap-3">
+                <p className="text-xs text-muted">Вид</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <RoleBtn active={view === "3d"} label="3D" hint="сзади героя" onClick={() => pickCast({ view: "3d" })} />
+                  <RoleBtn active={view === "top"} label="Сверху" hint="плоская карта" onClick={() => pickCast({ view: "top" })} />
+                </div>
+                <p className="text-xs text-muted">Выживший</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {SURVIVORS.map((c) => (
+                    <RoleBtn key={c.id} active={survivorLook === c.id} label={c.label} hint="" onClick={() => pickCast({ survivor: c.id })} />
+                  ))}
+                </div>
+                <p className="text-xs text-muted">Бабушка</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {GRANDMAS.map((c) => (
+                    <RoleBtn key={c.id} active={grandmaLook === c.id} label={c.label} hint="" onClick={() => pickCast({ grandma: c.id })} />
+                  ))}
+                </div>
                 <label className="text-sm text-muted" htmlFor="player-name">
                   Имя для рейтинга
                   <input
@@ -374,7 +437,7 @@ export function HouseGame() {
                   className="rounded-xl bg-accent px-4 py-4 text-lg font-semibold text-bg disabled:opacity-50"
                 >
                   Играть
-                  <span className="mt-0.5 block text-sm font-normal">один против мишки</span>
+                  <span className="mt-0.5 block text-sm font-normal">один против бабушки</span>
                 </button>
                 <button
                   type="button"
@@ -384,7 +447,9 @@ export function HouseGame() {
                   По Wi‑Fi — вдвоём
                 </button>
                 <p className="text-sm leading-relaxed text-muted">
-                  Кружок слева — шаг вперёд и поворот. Палец по экрану — куда смотреть. Справа кнопки: бег, тихо, взять, свет.
+                  {view === "top"
+                    ? "Кружок — ходить по карте: вверх, вниз и вбок."
+                    : "Кружок слева — шаг и поворот. Палец по экрану — куда смотреть. Справа: бег, тихо, взять, свет."}
                 </p>
               </div>
             )}
@@ -393,7 +458,7 @@ export function HouseGame() {
               <div className="mt-5 flex flex-col gap-3">
                 <div className="grid grid-cols-2 gap-2">
                   <RoleBtn active={role === "survivor"} label="Выживший" hint="ищет выход" onClick={() => setRole("survivor")} />
-                  <RoleBtn active={role === "bear"} label="Мишка" hint="ловит гостя" onClick={() => setRole("bear")} />
+                  <RoleBtn active={role === "bear"} label="Бабушка" hint="ловит гостя" onClick={() => setRole("bear")} />
                 </div>
                 <button type="button" onClick={() => openRoom(roomCode())} className="rounded-xl bg-accent px-4 py-3 font-semibold text-bg">
                   Создать комнату
@@ -443,7 +508,7 @@ export function HouseGame() {
                   Откройте эту игру на втором телефоне в той же сети Wi‑Fi и введите код. Код только сводит вас, дальше персонажи ходят напрямую между устройствами.
                 </p>
                 <p className="text-sm">
-                  Вы: {role === "bear" ? "Мишка" : "Выживший"}
+                  Вы: {role === "bear" ? "Бабушка" : "Выживший"}
                   {connected.length > 0 ? ` · друг в сети (${connected.length})` : " · ждём второго"}
                 </p>
                 <ul className="text-sm text-muted">
@@ -508,7 +573,7 @@ export function HouseGame() {
       {paused && !result && (
         <Overlay>
           <p className="font-display text-3xl">Пауза</p>
-          <p className="mt-2 text-sm text-muted">Палец по экрану крутит взгляд. Кружок слева — идти. Мишка слышит бег и свет фонаря в лицо.</p>
+          <p className="mt-2 text-sm text-muted">Палец по экрану крутит взгляд. Кружок слева — идти. Бабушка слышит бег и свет фонаря.</p>
           <div className="mt-4 flex flex-col gap-2">
             <button type="button" className="rounded-xl bg-accent px-4 py-3 font-semibold text-bg" onClick={() => engineRef.current?.resume()}>
               Дальше
@@ -533,7 +598,7 @@ export function HouseGame() {
 
       {result && (
         <Overlay>
-          <p className="text-xs tracking-[0.2em] text-accent uppercase">{result.you === "bear" ? "Ночь мишки" : "Рейтинг ночи"}</p>
+          <p className="text-xs tracking-[0.2em] text-accent uppercase">{result.you === "bear" ? "Ночь бабушки" : "Рейтинг ночи"}</p>
           <p className="font-display text-7xl leading-none">{result.rank}</p>
           <p className="font-display mt-1 text-2xl">{result.title}</p>
           <p className="mt-3 text-sm text-muted">
