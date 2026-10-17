@@ -41,6 +41,7 @@ export function HouseGame() {
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [pad, setPad] = useState(false);
+  const [playingAs, setPlayingAs] = useState<Role>("survivor");
   const [digits, setDigits] = useState("");
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -55,6 +56,7 @@ export function HouseGame() {
   const batRef = useRef<HTMLSpanElement>(null);
   const itemsRef = useRef<HTMLParagraphElement>(null);
   const vigRef = useRef<HTMLDivElement>(null);
+  const lookPtr = useRef<{ id: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     nameRef.current = name;
@@ -139,6 +141,7 @@ export function HouseGame() {
     setPaused(false);
     engineRef.current?.setNet(null);
     engineRef.current?.start({ control: "survivor", aiBear: true });
+    setPlayingAs("survivor");
     setPhase("play");
   }
 
@@ -207,6 +210,7 @@ export function HouseGame() {
     setPaused(false);
     const iAmBear = roleRef.current === "bear";
     const friendBear = remoteRole.current === "bear";
+    setPlayingAs(iAmBear ? "bear" : "survivor");
     const p2p = p2pRef.current;
     engineRef.current?.setNet((msg, reliable) => {
       if (!p2p) return;
@@ -241,68 +245,114 @@ export function HouseGame() {
     else startSolo();
   }
 
+  useEffect(() => {
+    if (phase === "play" && !paused && !note && !pad) return;
+    engineRef.current?.setStick(0, 0);
+    engineRef.current?.hold("sprint", false);
+    engineRef.current?.hold("crouch", false);
+  }, [phase, paused, note, pad]);
+
   const connected = peers.filter((p) => p.connectionState === "connected");
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg text-fg" style={{ touchAction: "none" }}>
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 h-full w-full"
-        onPointerDown={() => {
-          unlock();
-          if (phase === "play" && !result && !paused && matchMedia("(pointer: fine)").matches) {
-            void canvasRef.current?.requestPointerLock();
-          }
-        }}
-      />
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
       <div ref={vigRef} className="pointer-events-none absolute inset-0" style={{ boxShadow: "inset 0 0 90px rgba(0,0,0,0.55)" }} />
 
-      {phase === "play" && !result && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-3 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="max-w-xl rounded-lg bg-bg/80 px-4 py-3 backdrop-blur-sm">
-              <p className="font-display text-lg leading-tight">Дом Мишки</p>
-              <p ref={goalRef} className="mt-1 text-sm leading-snug text-muted" />
-            </div>
-            <div className="rounded-lg bg-bg/80 px-4 py-3 text-right backdrop-blur-sm">
-              <span ref={timeRef} className="font-display text-2xl">
-                0:00
-              </span>
-              <p ref={itemsRef} className="mt-1 text-xs text-muted" />
-            </div>
-          </div>
-          <div className="flex max-w-xs flex-col gap-2">
-            <Meter label="Дыхание" barRef={stamRef} />
-            <Meter label="Фонарь" barRef={batRef} />
-          </div>
-          <p ref={promptRef} className="pointer-events-none text-center font-display text-xl" />
-        </div>
+      {phase === "play" && !result && !paused && !note && !pad && (
+        <div
+          className="absolute inset-0 z-[5]"
+          style={{ touchAction: "none" }}
+          onPointerDown={(e) => {
+            unlock();
+            if (e.pointerType === "mouse") {
+              void canvasRef.current?.requestPointerLock();
+              return;
+            }
+            e.currentTarget.setPointerCapture(e.pointerId);
+            lookPtr.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+          }}
+          onPointerMove={(e) => {
+            const last = lookPtr.current;
+            if (!last || last.id !== e.pointerId) return;
+            const dx = e.clientX - last.x;
+            const dy = e.clientY - last.y;
+            lookPtr.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+            engineRef.current?.addLook(dx * 3.4, dy * 2.8);
+          }}
+          onPointerUp={(e) => {
+            if (lookPtr.current?.id === e.pointerId) lookPtr.current = null;
+          }}
+          onPointerCancel={() => {
+            lookPtr.current = null;
+          }}
+        />
       )}
 
       {phase === "play" && !result && (
-        <div className="absolute inset-x-0 bottom-0 z-20 p-4 md:hidden">
-          <div className="flex items-end justify-between gap-3">
-            <Stick
-              onChange={(x, y) => engineRef.current?.setStick(x, y)}
-            />
-            <LookPad onLook={(x, y) => engineRef.current?.addLook(x, y)} />
-            <div className="flex flex-col gap-2">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-3"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 rounded-lg bg-bg/80 px-3 py-2 backdrop-blur-sm">
+              <p className="font-display text-base leading-tight">Дом Мишки</p>
+              <p ref={goalRef} className="mt-0.5 text-sm leading-snug text-muted" />
+            </div>
+            <button
+              type="button"
+              className="pointer-events-auto h-11 shrink-0 rounded-full border border-border bg-bg/80 px-4 text-sm text-fg"
+              onClick={() => engineRef.current?.tap("pause")}
+            >
+              Пауза
+            </button>
+          </div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex w-36 flex-col gap-1">
+              {playingAs === "survivor" && (
+                <>
+                  <Meter label="Дыхание" barRef={stamRef} />
+                  <Meter label="Фонарь" barRef={batRef} />
+                </>
+              )}
+            </div>
+            <div className="rounded-lg bg-bg/80 px-3 py-2 text-right backdrop-blur-sm">
+              <span ref={timeRef} className="font-display text-xl">
+                0:00
+              </span>
+              <p ref={itemsRef} className="mt-0.5 max-w-36 text-xs text-muted" />
+            </div>
+          </div>
+          <p ref={promptRef} className="text-center font-display text-lg leading-tight" />
+        </div>
+      )}
+
+      {phase === "play" && !result && !paused && !note && !pad && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-3 p-3"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
+          <Stick onChange={(x, y) => engineRef.current?.setStick(x, y)} />
+          {playingAs === "survivor" ? (
+            <div className="grid grid-cols-2 gap-2">
               <TouchBtn label="Бег" onDown={() => engineRef.current?.hold("sprint", true)} onUp={() => engineRef.current?.hold("sprint", false)} />
               <TouchBtn label="Тихо" onDown={() => engineRef.current?.hold("crouch", true)} onUp={() => engineRef.current?.hold("crouch", false)} />
               <TouchBtn label="Взять" onDown={() => engineRef.current?.tap("interact")} />
               <TouchBtn label="Свет" onDown={() => engineRef.current?.tap("flash")} />
             </div>
-          </div>
+          ) : (
+            <TouchBtn label="Дверь" onDown={() => engineRef.current?.tap("interact")} />
+          )}
         </div>
       )}
 
       {phase !== "play" && (
-        <div className="absolute inset-0 z-30 flex items-end justify-center overflow-y-auto bg-bg/55 p-4 sm:items-center">
+        <div className="absolute inset-0 z-30 flex items-end justify-center overflow-y-auto bg-bg/55 p-4 sm:items-center" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))", paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
           <div className="w-full max-w-lg rounded-2xl border border-border bg-surface/95 p-5 shadow-2xl sm:p-7">
             <p className="text-xs tracking-[0.22em] text-accent uppercase">Ночной побег</p>
-            <h1 className="font-display mt-1 text-5xl leading-none sm:text-6xl">Дом Мишки</h1>
+            <h1 className="font-display mt-1 text-4xl leading-none sm:text-6xl">Дом Мишки</h1>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              Ты заперт в двухэтажном доме. Мишка в цилиндре слышит бег и видит фонарь. Найди ключ или выломай окно.
+              Дом на весь экран телефона. Мишка слышит бег и видит фонарь. Найди ключ или выломай окно.
             </p>
 
             {phase === "menu" && !wifiOpen && (
@@ -323,8 +373,8 @@ export function HouseGame() {
                   onClick={startSolo}
                   className="rounded-xl bg-accent px-4 py-4 text-lg font-semibold text-bg disabled:opacity-50"
                 >
-                  Start
-                  <span className="mt-0.5 block text-sm font-normal">играть одному против мишки</span>
+                  Играть
+                  <span className="mt-0.5 block text-sm font-normal">один против мишки</span>
                 </button>
                 <button
                   type="button"
@@ -333,8 +383,8 @@ export function HouseGame() {
                 >
                   По Wi‑Fi — вдвоём
                 </button>
-                <p className="text-xs leading-relaxed text-muted">
-                  A / ← поворот налево, D / → направо, W вперёд, S назад. Мышь — взгляд. Shift — бег, C — красться, E — действие, F — фонарь.
+                <p className="text-sm leading-relaxed text-muted">
+                  Кружок слева — шаг вперёд и поворот. Палец по экрану — куда смотреть. Справа кнопки: бег, тихо, взять, свет.
                 </p>
               </div>
             )}
@@ -458,7 +508,7 @@ export function HouseGame() {
       {paused && !result && (
         <Overlay>
           <p className="font-display text-3xl">Пауза</p>
-          <p className="mt-2 text-sm text-muted">A налево, D направо, W вперёд. Мишка слышит бег и свет фонаря в лицо.</p>
+          <p className="mt-2 text-sm text-muted">Палец по экрану крутит взгляд. Кружок слева — идти. Мишка слышит бег и свет фонаря в лицо.</p>
           <div className="mt-4 flex flex-col gap-2">
             <button type="button" className="rounded-xl bg-accent px-4 py-3 font-semibold text-bg" onClick={() => engineRef.current?.resume()}>
               Дальше
@@ -564,7 +614,7 @@ function Board({ rows }: { rows: BoardRow[] }) {
 
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-bg/70 p-4">
+    <div className="absolute inset-0 z-40 flex items-end justify-center overflow-y-auto bg-bg/70 p-4 sm:items-center" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-5">{children}</div>
     </div>
   );
@@ -574,7 +624,7 @@ function TouchBtn({ label, onDown, onUp }: { label: string; onDown: () => void; 
   return (
     <button
       type="button"
-      className="pointer-events-auto h-12 min-w-16 rounded-full border border-border bg-bg/80 px-3 text-sm text-fg"
+      className="pointer-events-auto h-14 min-w-16 rounded-2xl border border-border bg-bg/80 px-3 text-sm font-semibold text-fg"
       onPointerDown={(e) => {
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -608,8 +658,9 @@ function Stick({ onChange }: { onChange: (x: number, y: number) => void }) {
   return (
     <div
       ref={ref}
-      className="pointer-events-auto relative h-28 w-28 shrink-0 rounded-full border border-border bg-bg/70"
+      className="pointer-events-auto relative h-28 w-28 shrink-0 touch-none rounded-full border border-border bg-bg/70"
       onPointerDown={(e) => {
+        e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
         move(e);
       }}
@@ -619,36 +670,17 @@ function Stick({ onChange }: { onChange: (x: number, y: number) => void }) {
       onPointerUp={(e) => {
         setKnob({ x: 0, y: 0 });
         onChange(0, 0);
-        e.currentTarget.releasePointerCapture(e.pointerId);
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onPointerCancel={() => {
+        setKnob({ x: 0, y: 0 });
+        onChange(0, 0);
       }}
     >
       <span
         className="absolute top-1/2 left-1/2 h-12 w-12 rounded-full bg-accent"
         style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
       />
-    </div>
-  );
-}
-
-function LookPad({ onLook }: { onLook: (x: number, y: number) => void }) {
-  const last = useRef<{ x: number; y: number } | null>(null);
-  return (
-    <div
-      className="pointer-events-auto h-28 flex-1 rounded-2xl border border-dashed border-border bg-bg/40"
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        last.current = { x: e.clientX, y: e.clientY };
-      }}
-      onPointerMove={(e) => {
-        if (!last.current) return;
-        onLook((e.clientX - last.current.x) * 1.4, (e.clientY - last.current.y) * 1.2);
-        last.current = { x: e.clientX, y: e.clientY };
-      }}
-      onPointerUp={() => {
-        last.current = null;
-      }}
-    >
-      <span className="flex h-full items-center justify-center text-xs text-muted">Взгляд</span>
     </div>
   );
 }

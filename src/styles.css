@@ -26,6 +26,11 @@
   body {
     margin: 0;
     overflow: hidden;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
 
   button:not(:disabled),
@@ -35,6 +40,12 @@
 
   #root {
     height: 100%;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
   }
 }
 
