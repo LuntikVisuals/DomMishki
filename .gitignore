@@ -1,0 +1,17 @@
+node_modules
+dist
+.output
+.vercel
+.tanstack
+.nitro
+screenshots
+artifacts
+*.log
+.env
+.env.*
+.DS_Store
+
+# sandbox internals — not part of the game
+.grok/*
+!.grok/app-env.json
+AGENTS.md
